@@ -370,14 +370,18 @@ func (s *SQLLog) poll(result chan interface{}, pollStart int64) {
 	wait := time.NewTicker(s.d.GetPollInterval())
 	defer wait.Stop()
 	defer close(result)
-
+	logrus.Debug("starting polling")
 	for {
+		logrus.Debug("polling")
 		if waitForMore {
 			select {
 			case <-s.ctx.Done():
+				logrus.Debug("stop polling")
 				return
 			case check := <-s.notify:
+				logrus.Debug("received a notification")
 				if check <= last {
+					logrus.Debug("skipping notification as we already have it ", check, " <= ", last)
 					continue
 				}
 			case <-wait.C:
@@ -385,7 +389,12 @@ func (s *SQLLog) poll(result chan interface{}, pollStart int64) {
 		}
 		waitForMore = true
 
-		rows, err := s.d.After(s.ctx, last, 500)
+		timectx, cancel := context.WithTimeout(s.ctx, time.Duration(time.Second*20))
+		defer cancel()
+
+		logrus.Debug("listing changes")
+		rows, err := s.d.After(timectx, last, 500)
+		logrus.Debug("listed changes")
 		if err != nil {
 			logrus.Errorf("fail to list latest changes: %v", err)
 			continue
